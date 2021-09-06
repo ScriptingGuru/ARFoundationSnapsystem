@@ -4,39 +4,31 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+/// <summary>
+/// Other snappoints are detected by this script using OnTriggerStay Event.
+/// If two snapPoints are detected, THIS SnapPointTrigger and another SnapPointTrigger script, will
+/// initiate the snap process <see cref="SnapSystem"/>.
+/// </summary>
+
 public class SnapPointTrigger : MonoBehaviour
 {
-    [SerializeField] private SnapPointTriggerSystem snapTriggerSystem;
+    [SerializeField] private SnapSystem snapTriggerSystem;
     [SerializeField] private CollisionDetecter collisionDetecter;
     
     private BoxCollider snapCollider;
-    public BoxCollider SnapCollider => snapCollider;
-    private bool isDetectedOtherSnapPoint;
 
-    public SnapPointTrigger currentSnapPointContainer;
-    public SnapPointTrigger snapPointBucket;
-    
-    private bool checkingSnapPoints;
-
+    [ReadOnly] public SnapPointTrigger currentDetectedSnapPoint;
+    private SnapPointTrigger thisSnapPointTrigger;
     private bool SnapPointDisabled;
-
+    private const float minAngle = 150f;
 
     private void Awake()
     {
-        SnapPointDisabled = false;
+        thisSnapPointTrigger = GetComponent<SnapPointTrigger>();
+         SnapPointDisabled = false;
         snapCollider = GetComponent<BoxCollider>();
-       // EventBus.Instance.OnGameObjectDrag += OnGameObjectDrag;
     }
 
-
-    // DISABLE SnapPointsTriggers And Attach (AND the rest of SELECTED GO's SnapPoints IF
-    // OTHER SnapPoints is SAME Position AS OTHER DETECTED SnapPoints)
-
-    // DISABLE Collider Detection on THIS SnapPointTrigger after Snap
-    public void DisableSnapPoints()
-    {
-        EventBus.Instance.OnGameObjectDrag += EnableSnapPointsAndDetachSnapPoints;
-    }
     private void OnEnable()
     {
         if (SelectionHandler.SelectedGO != snapTriggerSystem.gameObject)
@@ -47,131 +39,119 @@ public class SnapPointTrigger : MonoBehaviour
 
     private void OnDestroy()
     {
-        EventBus.Instance.OnGameObjectDrag -= EnableSnapPointsAndDetachSnapPoints;
-        EventBus.Instance.OnSelectGO -= SelectGo;
+       // EventBus.Instance.OnSelectGO -= EnableSnapPointsAndDetachSnapPoints;
+        EventBus.Instance.OnSelectGO -= OnSelectedGameObject;
     }
 
 
-    // Perhaps use later (SnapPoint Attachment Method)
+    /// <summary>
+    /// THIS "ONTRIGGERSTAY" FLOW DETECTS OTHER SNAPPOINT
+    /// TRIGGERS UPON WHICH TO SNAP. IT ALSO DETECTS OTHER
+    /// COLLIDERS IN ORDER TO TURN ITSELF OFF IF THIS GAMEOBJECT (PARENT)
+    /// ISN'T THE ONE SELECTED.
+    /// </summary>
 
-    //private IEnumerator AttachOtherSnapPoints()
-    //{
-    //    yield return new WaitForSeconds(0.5f);
-    //    foreach (SnapPointTrigger snapPointTrigger in transform.parent.GetComponentsInChildren<SnapPointTrigger>())
-    //    {
-    //        if (snapPointTrigger.snapPointBucket)
-    //        {
-
-    //          //  snapPointTrigger.currentSnapPointContainer.currentSnapPointContainer = snapPointTrigger.snapPointBucket;
-    //           // snapPointTrigger.currentSnapPointContainer.DisableSnapPoints();
-    //            snapPointTrigger.currentSnapPointContainer = snapPointTrigger.snapPointBucket;
-    //         //   snapPointTrigger.DisableSnapPoints();
-    //            //   snapPointTrigger.DisableSnapPoints();
-    //        }
-
-    //        // SnapPointDetectionController.Instance.currentDETECTEDSnapPoint.DisableSnapPoints();
-    //    }
-    //    yield return new WaitForSeconds(0.2f);
-    //        DisableSnapPoints();
-
-    //}
-
-    private void EnableSnapPointsAndDetachSnapPoints(Vector3 selectedGo)
-    {
-        EventBus.Instance.OnGameObjectDrag -= EnableSnapPointsAndDetachSnapPoints;
-
-        if (SelectionHandler.SelectedGO == snapTriggerSystem.gameObject && SnapPointDisabled)
-        {
-            // this.currentSnapPointContainer.currentSnapPointContainer.ToggleSnapCollider(true);
-            currentSnapPointContainer.currentSnapPointContainer = null;     // Detach OTHER Go SnapPoint First
-            currentSnapPointContainer = null;                              // Detach THIS Go SnapPoint Second
-
-            SnapPointDisabled = false;
-            Debug.Log("SnapPoint " + transform.name + " and SnapPoint " + SnapPointDetectionController.Instance.currentDETECTEDSnapPoint + "Is ENABLED");
-        }
-    }
-
-    // Will be Triggered If Any Colliders is Detected
     private void OnTriggerStay(Collider other)
     {
-        if (snapTriggerSystem.gameObject == SelectionHandler.SelectedGO) // IF THIS Parent GameObject is The selected Product
+        // If this is the selected gameobject...
+        if (snapTriggerSystem.gameObject == SelectionHandler.SelectedGO)
         {
+            // Activate Snappoint trigger if disabled...
             ToggleSnapPointCollider(true);
-               // SnapPointDisabled = false;
-            if (collisionDetecter.CollisionDetected)
+            // Abort If this gameobject collides with anything...
+            if (StaticCollisionParameters.CollisionDetected)
             {
-                snapTriggerSystem.ToggleGhostHighlighter();
                 EmptyCurrentSelectedSnapPoints();
                 return;
             }
 
+            // If this snappoint trigger isn't colliding with anything and another snappoint is detected,
             else if (other.GetComponent<SnapPointTrigger>())
             {
+                float angleBetweenVectors = Vector3.Angle(other.GetComponent<SnapPointTrigger>().transform.forward, thisSnapPointTrigger.transform.forward);
 
-                Debug.Log("Snap Point Detected");
-                if (SnapPointDetectionController.Instance.currentSELECTEDSnapPoint != GetComponent<SnapPointTrigger>())
-                {
-                    if (currentSnapPointContainer == null && other.GetComponent<SnapPointTrigger>().currentSnapPointContainer == null)
+
+                    // Is my snappoint direction equivalent to that of another snappoint?
+                    if (angleBetweenVectors > minAngle) // they're in roughly the same direction
                     {
-                        SnapPointDetectionController.Instance.currentSELECTEDSnapPoint = GetComponent<SnapPointTrigger>();
-                        SnapPointDetectionController.Instance.currentDETECTEDSnapPoint = other.GetComponent<SnapPointTrigger>();
-                           snapTriggerSystem.ToggleGhostHighlighter();
-                        
+                    SnapPointTrigger currentDetectedSnapPointTrigger = other.GetComponent<SnapPointTrigger>();
+                    float distance = Vector3.Distance(transform.position, currentDetectedSnapPointTrigger.transform.position);
+
+                    // If two or more snappoints are detected at the same time from the same Gameobject, determine which
+                    // snappoint has the closest distance from the selected snappoint to the detected snappoint.
+                    // The one with the shortest distance becomes the new Current Selected SnapPoint
+
+                   // Debug.Log("Other SnapPoint Distance: " + distance + "   " + " Current Closest Distance: " + SnapPointDetectionHandler.ClosestDistance);
+                    if (SnapPointDetectionHandler.currentSELECTEDSnapPoint != null && SnapPointDetectionHandler.currentSELECTEDSnapPoint != thisSnapPointTrigger)
+                    {
+                        if (distance < SnapPointDetectionHandler.ClosestDistance)
+                        {
+                            SnapPointDetectionHandler.ClosestDistance = distance;
+                            AddSnapPoints(currentDetectedSnapPointTrigger, thisSnapPointTrigger);
+                            snapTriggerSystem.InitalizeSnapProcess(); // SnapPoint Ready To Snap
+                        }
                     }
                     else
                     {
-                        EmptyCurrentSelectedSnapPoints();
-                        snapTriggerSystem.ToggleGhostHighlighter();
+                        SnapPointDetectionHandler.ClosestDistance = distance;
+                        AddSnapPoints(currentDetectedSnapPointTrigger, thisSnapPointTrigger);
+                        snapTriggerSystem.InitalizeSnapProcess(); // SnapPoint Ready To Snap
                     }
                 }
             }
         }
-       // Will Turn Off Collider If The SnapPoint Trigger is Inside Another Collider
-        else if (other.GetComponent<SnapPointTriggerSystem>() && other.GetComponent<SnapPointTriggerSystem>() != snapTriggerSystem && other.GetComponent<SnapPointTrigger>() != GetComponent<SnapPointTrigger>())
+
+        // If SnapPoint is not the selected gameobject
+        // and the SnapPoint Trigger is located within
+        // another collider, the collider will be disabled.
+        else if (other.GetComponent<SnapSystem>() && other.GetComponent<SnapSystem>() != snapTriggerSystem)
         {
-            if (SelectionHandler.SelectedGO != null && other.GetComponent<SnapPointTriggerSystem>() != SelectionHandler.SelectedGO.GetComponent<SnapPointTriggerSystem>())
+            if (SelectionHandler.SelectedGO != null && SelectionHandler.SelectedGO.GetComponent<SnapSystem>() != other.GetComponent<SnapSystem>())
             {
-                EventBus.Instance.OnSelectGO += SelectGo; 
+                EventBus.Instance.OnSelectGO += OnSelectedGameObject;
                 ToggleSnapPointCollider(false);
-                Debug.Log("Detected other Collider!");
             }
         }
     }
 
-    private void SelectGo(GameObject obj)
+    private static void AddSnapPoints(SnapPointTrigger currentDetectedSnapPointTrigger, SnapPointTrigger thisCurrentSnapPointTrigger)
     {
-            Debug.Log("TESTTESTTEST");
-            ToggleSnapPointCollider(true);
-        EventBus.Instance.OnSelectGO -= SelectGo;
-        snapTriggerSystem.ToggleGhostHighlighter();
+        if (SnapPointDetectionHandler.currentSELECTEDSnapPoint != thisCurrentSnapPointTrigger)
+            SnapPointDetectionHandler.currentSELECTEDSnapPoint = thisCurrentSnapPointTrigger;
+     
+        if (SnapPointDetectionHandler.currentDETECTEDSnapPoint != currentDetectedSnapPointTrigger)
+            SnapPointDetectionHandler.currentDETECTEDSnapPoint = currentDetectedSnapPointTrigger;
+    }
+
+    private void OnSelectedGameObject(GameObject obj, ProductPrefabDataManager productPrefabDataManager)
+    {
+        ToggleSnapPointCollider(true);
+        EventBus.Instance.OnSelectGO -= OnSelectedGameObject;
     }
 
     private void ToggleSnapPointCollider(bool toogle)
     {
-        this.snapCollider.enabled = toogle;
+        if (snapCollider.enabled != toogle)
+        {
+            this.snapCollider.enabled = toogle;
+        }
     }
 
     private static void EmptyCurrentSelectedSnapPoints()
     {
-        SnapPointDetectionController.Instance.currentSELECTEDSnapPoint = null;
-        SnapPointDetectionController.Instance.currentDETECTEDSnapPoint = null;
+        SnapPointDetectionHandler.currentSELECTEDSnapPoint = null;
+        SnapPointDetectionHandler.currentDETECTEDSnapPoint = null;
     }
 
     private void OnTriggerExit(Collider other)
     {
         if (snapTriggerSystem.gameObject == SelectionHandler.SelectedGO && other.GetComponent<SnapPointTrigger>())
         {
-            EmptyCurrentSelectedSnapPoints();
-            EmptySnapPointBucket(other);
-            snapTriggerSystem.ToggleGhostHighlighter();
+            if (other.GetComponent<SnapPointTrigger>() == SnapPointDetectionHandler.currentDETECTEDSnapPoint)
+            {
+                EmptyCurrentSelectedSnapPoints();
+                snapTriggerSystem.ResetSnapProcess();
+            }
         }
-    }
-
-    private void EmptySnapPointBucket(Collider other)
-    {
-        other.GetComponent<SnapPointTrigger>().currentSnapPointContainer = null;
-        currentSnapPointContainer = null;
-        snapPointBucket = null;
-        snapTriggerSystem.ToggleGhostHighlighter();
     }
 }

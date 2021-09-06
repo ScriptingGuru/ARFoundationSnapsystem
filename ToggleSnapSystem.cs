@@ -1,13 +1,13 @@
 using UnityEngine;
 
-[RequireComponent(typeof(SnapPointTriggerSystem))]
+[RequireComponent(typeof(SnapSystem))]
 public class ToggleSnapSystem : MonoBehaviour
 {
-    private SnapPointTriggerSystem snapTriggerSystem;
+    private SnapSystem snapTriggerSystem;
 
     private void Awake()
     {
-        snapTriggerSystem = this.GetComponent<SnapPointTriggerSystem>();
+        snapTriggerSystem = this.GetComponent<SnapSystem>();
         snapTriggerSystem.enabled = false;
     }
 
@@ -28,7 +28,7 @@ public class ToggleSnapSystem : MonoBehaviour
         ToggleSnapTriggerSystem(gameObject, false);
     }
 
-    private void EnableSnappingSystem(GameObject gameObject) 
+    private void EnableSnappingSystem(GameObject gameObject, ProductPrefabDataManager productPrefabDataManager) 
     {
         ToggleSnapTriggerSystem(gameObject, true);
     }

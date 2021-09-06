@@ -2,29 +2,28 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GhostVerifySnapPosition : MonoBehaviour
+public class GhostCollisionVerfication : MonoBehaviour
 {
-    [SerializeField] private SnapPointTriggerSystem snapTriggerSystem;
+    [SerializeField] private SnapSystem snapTriggerSystem;
     [SerializeField] private CollisionDetecter collisionDetecter;
-    private  bool collisionDetectedByGhostprefab;
 
-    public bool CollisionDetectedByGhostprefab { get => collisionDetectedByGhostprefab;}
+    private bool collisionDetectedByGhostprefab;
+
+    public bool CollisionDetectedByGhostprefab { get => collisionDetectedByGhostprefab; set => collisionDetectedByGhostprefab = value; }
 
     private void OnTriggerStay(Collider other)
     {
         if (other.GetComponent<CollisionDetecter>() && other.GetComponent<CollisionDetecter>() != collisionDetecter)
         {
-            collisionDetectedByGhostprefab = true;
-            transform.parent.GetChild(0).gameObject.SetActive(false);
-            Debug.Log("Ghost Prefab Collision Detection" + collisionDetectedByGhostprefab);
+                collisionDetectedByGhostprefab = true;
         }
     }
+
     private void OnTriggerExit(Collider other)
     {
         if (other.GetComponent<CollisionDetecter>() && other.GetComponent<CollisionDetecter>() != collisionDetecter)
         {
             collisionDetectedByGhostprefab = false;
-            Debug.Log("Ghost Prefab Collision Detection" + collisionDetectedByGhostprefab);
         }
     }
 }

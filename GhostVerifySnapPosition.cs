@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GhostCollisionVerfication : MonoBehaviour
+public class GhostVerifySnapPosition : MonoBehaviour
 {
     [SerializeField] private SnapSystem snapTriggerSystem;
     [SerializeField] private CollisionDetecter collisionDetecter;
